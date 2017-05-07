@@ -40,8 +40,8 @@ swa \
   --total-deal-price 120 \ # In dollars or points (optional)
   --interval 5 \ # In minutes (optional)
   --daily-update \ # Send a daily SMS update of prices (optional)
-  --daily-update-at '19:00' # Time to send daily update, default is 18:00/6pm (optional)
-  --nonstop # Filter to only nonstop flights (optional)
+  --daily-update-at '19:00' \ # Time to send daily update, default is 18:00/6pm (optional)
+  --nonstop \ # Filter to only nonstop flights (optional)
 ```
 
 If you would like to look at flights going **one way** between two airports, you can use the `--one-way` flag. The optional `--specific-flight` flag will limit the search to a specific flight number. This ignores values entered with `--return-date` and `--return-time`, and `--total-deal-price`.
