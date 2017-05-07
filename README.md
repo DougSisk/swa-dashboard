@@ -44,7 +44,7 @@ swa \
   --nonstop # Filter to only nonstop flights (optional)
 ```
 
-If you would like to look at flights going **one way** between two airports, you can use the `--one-way` flag. This ignores values entered with `--return-date` and `--return-time`, and `--total-deal-price`.
+If you would like to look at flights going **one way** between two airports, you can use the `--one-way` flag. The optional `--specific-flight` flag will limit the search to a specific flight number. This ignores values entered with `--return-date` and `--return-time`, and `--total-deal-price`.
 
 ```bash
 swa \
@@ -57,6 +57,7 @@ swa \
   --passengers 2 \
   --individual-deal-price 50 \ # In dollars or points (optional)
   --interval 5 # In minutes (optional)
+  --specific-flight 1234 # Only show price for a specific flight number (optional)
 ```
 
 ### Twilio integration

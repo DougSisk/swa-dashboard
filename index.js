@@ -58,6 +58,7 @@ var dailyUpdate = false
 var dailyUpdateAt = "18:00"
 var dailyUpdateSet
 var nonstopClass = ''
+var specificFlight = ''
 
 // Parse command line options (no validation, sorry!)
 process.argv.forEach((arg, i, argv) => {
@@ -107,6 +108,8 @@ process.argv.forEach((arg, i, argv) => {
     case "--nonstop":
       nonstopClass = '.nonstop'
       break
+    case "--specific-flight":
+      specificFlight = parseInt(argv[i + 1])
   }
 })
 
@@ -444,6 +447,27 @@ const parsePriceMarkup = (priceMarkup) => {
 }
 
 /**
+ * Check to see if flight number matches specific number set
+ *
+ * @param {Str} priceMarkup
+ *
+ * @return {Boolean}
+ */
+const checkFlightNumber = (priceMarkup) => {
+  if (priceMarkup.className == 'product_price') {
+    var parent = priceMarkup.parentNode.parentNode.parentNode
+  } else {
+    var parent = priceMarkup.parentNode
+  }
+  var input = parent.find(`input`)[0]
+  var inputTitle = input.getAttribute('title')
+  var matches = inputTitle.match(/(flight )([0-9]+)/i)
+  var flightNumber = parseInt(matches[2])
+
+  return (flightNumber == specificFlight)
+}
+
+/**
  * Fetch latest Southwest prices
  *
  * @return {Void}
@@ -467,12 +491,14 @@ const fetch = () => {
     })
     .find(`#faresOutbound ${nonstopClass} .product_price, #b0Table span.var.h5`)
     .then((priceMarkup) => {
+      if (specificFlight && ! checkFlightNumber(priceMarkup)) return
       const price = parsePriceMarkup(priceMarkup)
       fares.outbound.push(price)
     })
     .find(`#faresReturn ${nonstopClass} .product_price, #b1Table span.var.h5`)
     .then((priceMarkup) => {
       if (isOneWay) return // Only record return prices if it's a two-way flight
+      if (specificFlight && ! checkFlightNumber(priceMarkup)) return
       const price = parsePriceMarkup(priceMarkup)
       fares.return.push(price)
     })
@@ -608,6 +634,7 @@ dashboard.settings([
   `SMS alerts: ${isTwilioConfigured ? process.env.TWILIO_PHONE_TO : "disabled"}`,
   `Daily update: ${dailyUpdate ? dailyUpdateAt : "disabled"}`,
   `Nonstop: ${nonstopClass ? "enabled" : "disabled"}`,
+  specificFlight && `Specific Flight: ${specificFlight}`,
 ].filter(s => s))
 
 fetch()
