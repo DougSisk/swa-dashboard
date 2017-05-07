@@ -110,6 +110,7 @@ process.argv.forEach((arg, i, argv) => {
       break
     case "--specific-flight":
       specificFlight = parseInt(argv[i + 1])
+      break
   }
 })
 
