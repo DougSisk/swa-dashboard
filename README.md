@@ -79,6 +79,47 @@ export TWILIO_PHONE_FROM=""
 export TWILIO_PHONE_TO=""
 ```
 
+### Telegram integration
+You can create a Telegram bot by speaking with the [@botfather](https://telegram.me/BotFather)
+account.  He will provide you with an API key.  Now add your new bot to a group where you
+wish to see the deal notifications.  The next step is to figure out the ID of that chat, which
+is slightly involved.  Create a temporary script with the following contents:
+
+```js
+const TelegramBot = require('node-telegram-bot-api');
+ 
+// replace the value below with the Telegram token you receive from @BotFather 
+const token = 'YOUR_TELEGRAM_BOT_TOKEN';
+ 
+// Create a bot that uses 'polling' to fetch new updates 
+const bot = new TelegramBot(token, {polling: true});
+ 
+// Matches "/getid"
+bot.onText(/\/getid/, (msg) => {
+  // 'msg' is the received Message from Telegram 
+ 
+  const chatId = msg.chat.id;
+ 
+  // send back the ID to the chat
+  bot.sendMessage(chatId, chatId);
+});
+```
+
+Execute that script via `node script.js` and then send the `/getid` command in the chat.
+It should respond with your chat ID, looking like a negative number.  You can now
+CTRL-C kill and remove the temporary script.
+
+Place both your API token and that chat ID into the following environment variables:
+```bash
+export TELEGRAM_BOT_TOKEN=""
+export TELEGRAM_CHAT_ID=""
+```
+
+Same as for Twilio above, when the Telegram environment variables are configured, you
+can also use the daily update flags `--daily-update` and `--daily-update-at` to send
+you a daily message message with the current fare prices. The `--daily-update-at` flag
+is in 24 hour time format.
+
 ## Troubleshooting
 
 ### Python 2 requirement

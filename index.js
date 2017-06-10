@@ -24,6 +24,10 @@ const isTwilioConfigured = process.env.TWILIO_ACCOUNT_SID &&
                            process.env.TWILIO_PHONE_FROM &&
                            process.env.TWILIO_PHONE_TO
 
+// Check if Telegram env vars are set
+const isTelegramConfigured = process.env.TELEGRAM_BOT_TOKEN &&
+                           process.env.TELEGRAM_CHAT_ID
+
 // Fares
 var prevLowestOutboundFare
 var prevLowestReturnFare
@@ -103,7 +107,7 @@ process.argv.forEach((arg, i, argv) => {
       dailyUpdateAt = argv[i + 1]
       break
     case "--daily-update":
-      dailyUpdate = isTwilioConfigured
+      dailyUpdate = isTwilioConfigured || isTelegramConfigured
       break
     case "--nonstop":
       nonstopClass = '.nonstop'
@@ -385,6 +389,24 @@ isInternational = waypoints.some(w => w.iso !== "US")
 const dashboard = new Dashboard()
 waypoints.map(w => dashboard.waypoint(w))
 
+
+/**
+ * Send a message using any configured service
+ *
+ * @param {Str} message
+ *
+ * @return {Void}
+ */
+const sendMessage = (message) => {
+  if (isTwilioConfigured) {
+    sendTextMessage(message)
+  }
+
+  if (isTelegramConfigured) {
+    sendTelegramMessage(message)
+  }
+}
+
 /**
  * Send a text message using Twilio
  *
@@ -413,6 +435,27 @@ const sendTextMessage = (message) => {
       }
     })
   } catch(e) {}
+}
+
+
+/**
+ * Send a message using Telegram
+ *
+ * @param {Str} message
+ *
+ * @return {Void}
+ */
+const sendTelegramMessage = (message) => {
+  const TelegramBot = require('node-telegram-bot-api')
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const bot = new TelegramBot(token, { polling: false })
+  const chatId = process.env.TELEGRAM_CHAT_ID
+
+  bot.sendMessage(chatId, message).catch((error) => {
+    dashboard.log([
+      chalk.red(`Error: failed to send Telegram message to ${chatId} (${error.code}) - ${error.response.body.description}`)
+    ])
+  })
 }
 
 /**
@@ -518,32 +561,36 @@ const fetch = () => {
       var outboundFareDiffString = ""
       var returnFareDiffString = ""
 
-      // Create a string to show the difference
-      if (!isNaN(outboundFareDiff) && !isNaN(returnFareDiff)) {
+      // Usually this is because of a scraping error or there are no matching flights
+      if (!isFinite(lowestOutboundFare) && !isFinite(lowestReturnFare)) {
+        faresAreValid = false
 
-        // Usually this is because of a scraping error
-        if (!isFinite(outboundFareDiff) || !isFinite(returnFareDiff)) {
-          faresAreValid = false
-        }
-
-        if (outboundFareDiff > 0) {
-          outboundFareDiffString = chalk.green(`(down ${formatPrice(Math.abs(outboundFareDiff))})`)
-        } else if (outboundFareDiff < 0) {
-          outboundFareDiffString = chalk.red(`(up ${formatPrice(Math.abs(outboundFareDiff))})`)
-        } else if (outboundFareDiff === 0) {
-          outboundFareDiffString = chalk.blue(`(no change)`)
-        }
-
-        if (returnFareDiff > 0) {
-          returnFareDiffString = chalk.green(`(down ${formatPrice(Math.abs(returnFareDiff))})`)
-        } else if (returnFareDiff < 0) {
-          returnFareDiffString = chalk.red(`(up ${formatPrice(Math.abs(returnFareDiff))})`)
-        } else if (returnFareDiff === 0) {
-          returnFareDiffString = chalk.blue(`(no change)`)
-        }
+        dashboard.log([
+          chalk.yellow(`No matching flights could be found (trying again in ${pretty(interval * TIME_MIN)})`)
+        ])
       }
 
       if (faresAreValid) {
+        // Create a string to show the difference
+        if (!isNaN(outboundFareDiff) && !isNaN(returnFareDiff)) {
+
+          if (outboundFareDiff > 0) {
+            outboundFareDiffString = chalk.green(`(down ${formatPrice(Math.abs(outboundFareDiff))})`)
+          } else if (outboundFareDiff < 0) {
+            outboundFareDiffString = chalk.red(`(up ${formatPrice(Math.abs(outboundFareDiff))})`)
+          } else if (outboundFareDiff === 0) {
+            outboundFareDiffString = chalk.blue(`(no change)`)
+          }
+
+          if (returnFareDiff > 0) {
+            returnFareDiffString = chalk.green(`(down ${formatPrice(Math.abs(returnFareDiff))})`)
+          } else if (returnFareDiff < 0) {
+            returnFareDiffString = chalk.red(`(up ${formatPrice(Math.abs(returnFareDiff))})`)
+          } else if (returnFareDiff === 0) {
+            returnFareDiffString = chalk.blue(`(no change)`)
+          }
+        }
+
         // Store current fares for next time
         prevLowestOutboundFare = lowestOutboundFare
         prevLowestReturnFare = lowestReturnFare
@@ -558,9 +605,9 @@ const fetch = () => {
         if (awesomeDealIsAwesome) {
           let message
           if (isOneWay) {
-            message = `Deal alert! Fare total for ${originAirport}->${destinationAirport} has hit ${formatPrice(lowestOutboundFare)}.`
+            message = `Deal alert! Fare total for ${originAirport}->${destinationAirport} on ${outboundDateString}–${returnDateString} has hit ${formatPrice(lowestOutboundFare)}.`
           } else {
-            message = `Deal alert! Combined total for ${originAirport}->${destinationAirport} has hit ${formatPrice(lowestOutboundFare + lowestReturnFare)}. Individual fares are ${formatPrice(lowestOutboundFare)} (outbound) and ${formatPrice(lowestReturnFare)} (return).`
+            message = `Deal alert! Combined total for ${originAirport}->${destinationAirport} on ${outboundDateString}–${returnDateString} has hit ${formatPrice(lowestOutboundFare + lowestReturnFare)}. Individual fares are ${formatPrice(lowestOutboundFare)} (outbound) and ${formatPrice(lowestReturnFare)} (return).`
           }
 
           // Party time
@@ -568,9 +615,8 @@ const fetch = () => {
             rainbow(message)
           ])
 
-          if (isTwilioConfigured) {
-            sendTextMessage(message)
-          }
+          // Send a message to any configured service
+          sendMessage(message)
         }
 
         dashboard.log([
@@ -605,9 +651,9 @@ const fetch = () => {
         if (dailyUpdateSet == null) {
           dailyUpdateSet = setTimeout(() => {
             if (isOneWay) {
-              sendTextMessage(`Daily update: fare for ${originAirport}->${destinationAirport} is currently ${formatPrice(prevLowestOutboundFare)}.`)
+              sendMessage(`Daily update: fare for ${originAirport}->${destinationAirport} is currently ${formatPrice(prevLowestOutboundFare)}.`)
             } else {
-              sendTextMessage(`Daily update: combined total for ${originAirport}->${destinationAirport} is currently ${formatPrice(prevLowestOutboundFare + prevLowestReturnFare)}, individual fares are ${formatPrice(prevLowestOutboundFare)} (outbound) and ${formatPrice(prevLowestReturnFare)} (return).`)
+              sendMessage(`Daily update: combined total for ${originAirport}->${destinationAirport} is currently ${formatPrice(prevLowestOutboundFare + prevLowestReturnFare)}, individual fares are ${formatPrice(prevLowestOutboundFare)} (outbound) and ${formatPrice(prevLowestReturnFare)} (return).`)
             }
             dailyUpdateSet = null
           }, msTilDailyUpdate)
@@ -633,6 +679,7 @@ dashboard.settings([
   `Individual deal price: ${individualDealPrice ? `<= ${formatPrice(individualDealPrice)}` : "disabled"}`,
   !isOneWay && `Total deal price: ${totalDealPrice ? `<= ${formatPrice(totalDealPrice)}` : "disabled"}`,
   `SMS alerts: ${isTwilioConfigured ? process.env.TWILIO_PHONE_TO : "disabled"}`,
+  `Telegram alerts: ${isTelegramConfigured ? "enabled" : "disabled"}`,
   `Daily update: ${dailyUpdate ? dailyUpdateAt : "disabled"}`,
   `Nonstop: ${nonstopClass ? "enabled" : "disabled"}`,
   specificFlight && `Specific Flight: ${specificFlight}`,
